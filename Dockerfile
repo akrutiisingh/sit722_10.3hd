@@ -1,7 +1,15 @@
 FROM node:18-alpine
+
 WORKDIR /app
-COPY package*.json ./
+
+# Copy package files from the src directory
+COPY src/package*.json ./
+
 RUN npm install --production
-COPY . .
+
+# Copy application source code from src
+COPY src/ ./
+
 EXPOSE 8080
-CMD ["npm", "start"]
+
+CMD ["node", "server.js"]
