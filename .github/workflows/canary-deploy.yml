@@ -39,8 +39,8 @@ jobs:
       - name: Synthetic Health Probe Gate
         run: |
           echo "Testing Canary Slot Health..."
-          # Give container 15 seconds to warm up after deployment
-          sleep 15
+          # Give container 45 seconds to warm up after deployment
+          sleep 45
           for i in {1..10}; do
             STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://aks-canary-app-canary.azurewebsites.net/)
             echo "Probe $i returned HTTP $STATUS"
@@ -48,7 +48,7 @@ jobs:
               echo "Health check failed with HTTP $STATUS!"
               exit 1
             fi
-            sleep 2
+            sleep 3
           done
 
       - name: Promote Canary Slot (On Test Success)
