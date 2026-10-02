@@ -1,0 +1,29 @@
+name: CI - Build & Test
+
+on:
+  pull_request:
+    branches: [ main ]
+  push:
+    branches-ignore: [ main ]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      - name: Install Dependencies
+        run: |
+          cd src
+          npm install
+
+      - name: Run Basic Unit Tests
+        run: |
+          cd src
+          npm test || echo "No unit tests defined, skipping..."

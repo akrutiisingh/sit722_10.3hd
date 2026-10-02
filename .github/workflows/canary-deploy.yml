@@ -1,0 +1,74 @@
+name: CD - Progressive Canary Deployment
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  deploy-canary:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Azure Login
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Build & Push Docker Image
+        run: |
+          az acr login --name sit722registryakruti
+          docker build -t sit722registryakruti.azurecr.io/sit722-app:${{ github.sha }} .
+          docker push sit722registryakruti.azurecr.io/sit722-app:${{ github.sha }}
+
+      - name: Deploy Image to Canary Slot
+        uses: azure/webapps-deploy@v2
+        with:
+          app-name: 'aks-canary-app'
+          slot-name: 'canary'
+          images: 'sit722registryakruti.azurecr.io/sit722-app:${{ github.sha }}'
+
+      - name: Set 20% Traffic Split
+        run: |
+          az webapp traffic-routing set \
+            --resource-group sit722-canary-rg \
+            --name aks-canary-app \
+            --distribution canary=20
+
+      - name: Synthetic Health Probe Gate
+        run: |
+          echo "Testing Canary Slot Health..."
+          # Give container 15 seconds to warm up after deployment
+          sleep 15
+          for i in {1..10}; do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://aks-canary-app-canary.azurewebsites.net/)
+            echo "Probe $i returned HTTP $STATUS"
+            if [ "$STATUS" != "200" ]; then
+              echo "Health check failed with HTTP $STATUS!"
+              exit 1
+            fi
+            sleep 2
+          done
+
+      - name: Promote Canary Slot (On Test Success)
+        if: success()
+        run: |
+          echo "Health check passed! Promoting Canary slot to Production..."
+          az webapp deployment slot swap \
+            --resource-group sit722-canary-rg \
+            --name aks-canary-app \
+            --slot canary \
+            --target-slot production
+          
+          az webapp traffic-routing clear \
+            --resource-group sit722-canary-rg \
+            --name aks-canary-app
+
+      - name: Automated Rollback (On Test Failure)
+        if: failure()
+        run: |
+          echo "Health check failed! Clearing Canary traffic routing back to 0%..."
+          az webapp traffic-routing clear \
+            --resource-group sit722-canary-rg \
+            --name aks-canary-app
