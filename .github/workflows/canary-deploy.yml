@@ -22,13 +22,23 @@ jobs:
           docker build -t sit722registryakruti.azurecr.io/sit722-app:${{ github.sha }} .
           docker push sit722registryakruti.azurecr.io/sit722-app:${{ github.sha }}
 
+      - name: Configure App Service ACR Authentication
+        run: |
+          az webapp config container set \
+            --name aks-canary-app \
+            --resource-group sit722-canary-rg \
+            --slot canary \
+            --container-registry-url https://sit722registryakruti.azurecr.io \
+            --container-registry-user ${{ secrets.ACR_USERNAME }} \
+            --container-registry-password ${{ secrets.ACR_PASSWORD }}
+
       - name: Deploy Image to Canary Slot
         uses: azure/webapps-deploy@v2
         with:
           app-name: 'aks-canary-app'
           slot-name: 'canary'
           images: 'sit722registryakruti.azurecr.io/sit722-app:${{ github.sha }}'
-
+          
       - name: Set 20% Traffic Split
         run: |
           az webapp traffic-routing set \
